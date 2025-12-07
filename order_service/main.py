@@ -1,18 +1,17 @@
 import os
 import httpx
 from fastapi import FastAPI, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload # <--- THÊM IMPORT NÀY
 from typing import List, Optional
 from pydantic import BaseModel
 from database import SessionLocal, engine, Base
 import models
 
-# Tạo lại bảng nếu chưa có (Lưu ý: Nếu bảng cũ thiếu cột, nên xóa bảng cũ đi để code tự tạo lại)
+# Tạo bảng
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# URL các service khác
 RESTAURANT_SERVICE_URL = os.getenv("RESTAURANT_SERVICE_URL", "http://restaurant_service:8002")
 
 def get_db():
@@ -31,24 +30,20 @@ class OrderCreate(BaseModel):
     branch_id: int
     items: List[OrderItemCreate]
     coupon_code: Optional[str] = None
-    
-    # Thông tin khách hàng đầy đủ
     user_id: Optional[int] = None
     customer_name: str
     customer_phone: str
     delivery_address: str
     note: Optional[str] = None
 
-# ==========================================
-# API 1: TẠO ĐƠN HÀNG (/checkout)
-# ==========================================
+# --- API ---
 @app.post("/checkout")
 async def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
     total_price = 0
     order_items_data = []
 
     async with httpx.AsyncClient() as client:
-        # 1. Tính tiền (Gọi Restaurant Service lấy giá gốc)
+        # 1. Tính tiền
         for item in payload.items:
             try:
                 resp = await client.get(f"{RESTAURANT_SERVICE_URL}/foods/{item.food_id}")
@@ -56,7 +51,6 @@ async def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
                     raise HTTPException(status_code=400, detail=f"Món ăn ID {item.food_id} lỗi.")
                 
                 food_data = resp.json()
-                # Giá = Giá gốc * (1 - %giảm/100)
                 final_item_price = food_data['price'] * (1 - food_data.get('discount', 0)/100)
                 total_price += final_item_price * item.quantity
 
@@ -84,10 +78,10 @@ async def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
 
         final_price = max(0, total_price - discount_amount)
 
-    # 3. Lưu Order vào DB
+    # 3. Lưu Order
     new_order = models.Order(
-        user_id=payload.user_id,          # Lưu ID người mua
-        user_name=payload.customer_name,  # Lưu tên người nhận
+        user_id=payload.user_id,
+        user_name=payload.customer_name,
         branch_id=payload.branch_id,
         customer_phone=payload.customer_phone,
         delivery_address=payload.delivery_address,
@@ -102,7 +96,7 @@ async def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_order)
 
-    # Lưu Order Items
+    # Lưu món ăn
     for item in order_items_data:
         new_item = models.OrderItem(
             order_id=new_order.id,
@@ -115,55 +109,43 @@ async def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
     
     db.commit()
 
-    return {
-        "order_id": new_order.id, 
-        "total_price": final_price, 
-        "status": "PENDING_PAYMENT"
-    }
+    return {"order_id": new_order.id, "total_price": final_price, "status": "PENDING_PAYMENT"}
 
-# ==========================================
-# CÁC API KHÁC (ĐẢM BẢO KHÔNG BỊ THIẾU)
-# ==========================================
-
-# Lấy danh sách tất cả đơn (Dành cho Admin/Seller)
-# Sửa lại hàm get_orders trong order_service/main.py
+# --- CÁC API LẤY ĐƠN HÀNG (ĐÃ SỬA ĐỂ TRẢ VỀ ITEMS) ---
 
 @app.get("/orders")
 def get_orders(branch_id: Optional[int] = None, db: Session = Depends(get_db)):
-    query = db.query(models.Order)
-    
-    # Nếu có branch_id thì lọc, không thì lấy hết (cho Admin tổng)
+    q = db.query(models.Order).options(joinedload(models.Order.items)) # <--- Lấy luôn items
     if branch_id:
-        query = query.filter(models.Order.branch_id == branch_id)
-    
-    # Sắp xếp đơn mới nhất lên đầu
-    return query.order_by(models.Order.created_at.desc()).all()
+        q = q.filter(models.Order.branch_id == branch_id)
+    return q.order_by(models.Order.created_at.desc()).all()
 
-# Lấy lịch sử đơn hàng của 1 user (Dành cho Buyer xem "Đơn của tôi")
 @app.get("/orders/my-orders")
 def get_my_orders(user_id: int, db: Session = Depends(get_db)):
-    return db.query(models.Order).filter(models.Order.user_id == user_id).order_by(models.Order.created_at.desc()).all()
+    # QUAN TRỌNG: Thêm joinedload để lấy danh sách món ăn đi kèm
+    orders = db.query(models.Order).options(joinedload(models.Order.items))\
+               .filter(models.Order.user_id == user_id)\
+               .order_by(models.Order.created_at.desc()).all()
+    return orders
 
-# Lấy chi tiết 1 đơn hàng
 @app.get("/orders/{order_id}")
 def get_order_detail(order_id: int, db: Session = Depends(get_db)):
-    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    order = db.query(models.Order).options(joinedload(models.Order.items))\
+              .filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     return order
 
-# Cập nhật trạng thái thanh toán (Payment Service gọi)
-@app.put("/orders/{order_id}/paid")
-def mark_order_paid(order_id: int, db: Session = Depends(get_db)):
-    order = db.query(models.Order).filter(models.Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    order.status = "PAID"
-    db.commit()
-    return {"message": "Order paid"}
+# --- CÁC API CẬP NHẬT ---
 
-# Cập nhật trạng thái giao hàng (Seller gọi: Shipping, Delivered...)
+@app.put("/orders/{order_id}/paid")
+def mark_paid(order_id: int, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if order:
+        order.status = "PAID"
+        db.commit()
+    return {"status": "updated"}
+
 @app.put("/orders/{order_id}/status")
 def update_status(order_id: int, status: str, db: Session = Depends(get_db)):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
@@ -173,3 +155,12 @@ def update_status(order_id: int, status: str, db: Session = Depends(get_db)):
     order.status = status
     db.commit()
     return {"message": f"Updated to {status}"}
+
+# --- API CHECK REVIEW ---
+@app.get("/orders/{order_id}/check-review")
+def check_review_permission(order_id: int, user_id: int, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order: raise HTTPException(404, detail="Order not found")
+    if order.user_id != user_id: raise HTTPException(403, detail="Not your order")
+    if order.status != "COMPLETED": raise HTTPException(400, detail="Order not completed yet")
+    return {"branch_id": order.branch_id}

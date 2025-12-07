@@ -1,138 +1,171 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify'; // Dùng Toast cho đẹp
+import { toast } from 'react-toastify';
 import api from './api';
 
 function OrderHistory() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    
+    // Modal state
+    const [showReviewModal, setShowReviewModal] = useState(false);
+    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [reviewData, setReviewData] = useState({ rating: 5, comment: '' });
+
     const navigate = useNavigate();
 
     useEffect(() => {
-        fetchOrders(); 
-        
-        // Polling: Tự động cập nhật mỗi 5s
-        const interval = setInterval(() => {
-            fetchOrders(true);
-        }, 5000);
+        fetchOrders();
+        const interval = setInterval(() => fetchOrders(true), 5000);
         return () => clearInterval(interval);
     }, []);
 
     const fetchOrders = async (isBackground = false) => {
         const userId = localStorage.getItem('user_id');
-        if (!userId) {
-            if (!isBackground) navigate('/');
-            return;
-        }
-
+        if (!userId) { if(!isBackground) navigate('/'); return; }
         try {
-            if (!isBackground) setLoading(true);
+            if(!isBackground) setLoading(true);
             const res = await api.get('/orders/my-orders', { params: { user_id: userId } });
             setOrders(res.data);
-        } catch (err) {
-            console.error("Lỗi tải lịch sử:", err);
-        } finally {
-            if (!isBackground) setLoading(false);
-        }
+        } catch (err) { console.error(err); } 
+        finally { if(!isBackground) setLoading(false); }
     };
 
-    // --- HÀM XỬ LÝ HỦY ĐƠN ---
     const handleCancelOrder = async (orderId) => {
-        // Hỏi lại cho chắc
-        if (!window.confirm(`Bạn có chắc muốn hủy đơn hàng #${orderId} không?`)) return;
+        if (!window.confirm("Hủy đơn này?")) return;
+        try {
+            await api.put(`/orders/${orderId}/status`, null, { params: { status: 'CANCELLED' } });
+            toast.success("Đã hủy đơn");
+            fetchOrders();
+        } catch (err) { toast.error("Lỗi hủy đơn"); }
+    };
+
+    const openReviewModal = (order) => {
+        // Kiểm tra xem đơn hàng có món ăn (items) không
+        if (!order.items || order.items.length === 0) {
+            toast.error("Không tìm thấy thông tin món ăn trong đơn này!");
+            return;
+        }
+        setSelectedOrder(order);
+        setShowReviewModal(true);
+        setReviewData({ rating: 5, comment: '' });
+    };
+
+    const submitReview = async () => {
+        if (!selectedOrder) return;
+        const token = localStorage.getItem('access_token');
 
         try {
-            // Gọi API đổi trạng thái thành CANCELLED
-            // API này bạn đã test OK bên Seller Dashboard rồi
-            await api.put(`/orders/${orderId}/status`, null, {
-                params: { status: 'CANCELLED' }
+            // Lấy trực tiếp items từ đơn hàng đã chọn (không cần gọi API lại)
+            const items = selectedOrder.items; 
+
+            // Tạo payload
+            const payload = {
+                order_id: selectedOrder.id,
+                rating_general: reviewData.rating,
+                comment: reviewData.comment,
+                items: items.map(item => ({
+                    food_id: item.food_id,
+                    score: reviewData.rating 
+                }))
+            };
+
+            await api.post('/reviews', payload, {
+                headers: { Authorization: `Bearer ${token}` }
             });
-            
-            toast.success(`Đã hủy đơn hàng #${orderId}`);
-            fetchOrders(); // Tải lại danh sách ngay
+
+            toast.success("Đánh giá thành công! ⭐");
+            setShowReviewModal(false);
         } catch (err) {
-            toast.error("Không thể hủy đơn hàng này");
             console.error(err);
+            const msg = err.response?.data?.detail || "Lỗi gửi đánh giá";
+            toast.error(typeof msg === 'object' ? JSON.stringify(msg) : msg);
         }
     };
 
     const renderStatus = (status) => {
         const styles = {
-            'PENDING_PAYMENT': { color: '#ffc107', label: '⏳ Chờ thanh toán' }, // Màu vàng
-            'PAID': { color: '#28a745', label: '✅ Đã thanh toán (Chờ món)' },  // Màu xanh lá
-            'SHIPPING': { color: '#17a2b8', label: '🚚 Đang giao hàng' },      // Màu xanh dương
-            'COMPLETED': { color: '#6c757d', label: '🎉 Hoàn tất' },           // Màu xám
-            'CANCELLED': { color: '#dc3545', label: '❌ Đã hủy' }              // Màu đỏ
+            'PENDING_PAYMENT': { color: 'orange', label: '⏳ Chờ thanh toán' },
+            'PAID': { color: 'green', label: '✅ Đã thanh toán' },
+            'SHIPPING': { color: 'blue', label: '🚚 Đang giao' },
+            'COMPLETED': { color: 'gray', label: '🎉 Hoàn tất' },
+            'CANCELLED': { color: 'red', label: '❌ Đã hủy' }
         };
         const s = styles[status] || { color: 'black', label: status };
         return <span style={{ color: s.color, fontWeight: 'bold' }}>{s.label}</span>;
     };
-
-    const formatMoney = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
-    const formatDate = (dateString) => new Date(dateString).toLocaleString('vi-VN');
+    
+    const formatMoney = (a) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(a);
+    const formatDate = (d) => new Date(d).toLocaleString('vi-VN');
 
     return (
         <div className="container" style={{maxWidth: '900px'}}>
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
-                <h2>📜 Lịch sử đơn hàng</h2>
-                <button onClick={() => navigate('/shop')} style={{padding: '8px 15px', cursor: 'pointer'}}>← Quay lại mua sắm</button>
+            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
+                <h2>📜 Lịch sử</h2>
+                <button onClick={()=>navigate('/shop')}>← Quay lại</button>
+            </div>
+            
+            <div className="order-list">
+                {orders.map(order => (
+                    <div key={order.id} style={{border:'1px solid #ddd', padding:'20px', marginBottom:'20px', borderRadius:'8px', background: 'white'}}>
+                        <div style={{display:'flex', justifyContent:'space-between', borderBottom:'1px solid #eee', paddingBottom:'10px'}}>
+                            <div><strong>#{order.id}</strong> - {formatDate(order.created_at)}</div>
+                            <div>{renderStatus(order.status)}</div>
+                        </div>
+                        
+                        {/* --- PHẦN HIỂN THỊ MÓN ĂN (MỚI) --- */}
+                        <div style={{background: '#f9f9f9', padding: '10px', borderRadius: '5px', margin: '10px 0'}}>
+                            {order.items && order.items.length > 0 ? (
+                                order.items.map((item, idx) => (
+                                    <div key={idx} style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '5px'}}>
+                                        <span>• {item.quantity}x <b>{item.food_name}</b></span>
+                                        <span style={{color: '#666'}}>{formatMoney(item.price)}</span>
+                                    </div>
+                                ))
+                            ) : (
+                                <p style={{color: '#999', fontSize: '0.9rem'}}>Không có thông tin món ăn</p>
+                            )}
+                        </div>
+                        {/* ----------------------------------- */}
+
+                        <div style={{margin:'10px 0', fontSize: '0.9rem'}}>📍 {order.delivery_address}</div>
+                        
+                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                            <span style={{color:'#d32f2f', fontWeight:'bold', fontSize: '1.2rem'}}>
+                                Tổng: {formatMoney(order.total_price)}
+                            </span>
+                            
+                            <div style={{display: 'flex', gap: '10px'}}>
+                                {['PENDING_PAYMENT','PAID'].includes(order.status) && 
+                                    <button onClick={()=>handleCancelOrder(order.id)} style={{color:'red', border:'1px solid red', background:'white', padding: '5px 10px', cursor: 'pointer'}}>Hủy đơn</button>
+                                }
+                                {order.status === 'COMPLETED' && 
+                                    <button onClick={()=>openReviewModal(order)} style={{background:'#f6c23e', color:'white', border:'none', padding:'8px 15px', borderRadius:'4px', cursor: 'pointer', fontWeight: 'bold'}}>⭐ Đánh giá</button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                ))}
             </div>
 
-            {loading ? <p>Đang tải...</p> : (
-                orders.length === 0 ? (
-                    <div style={{textAlign: 'center', padding: '40px', background: '#f9f9f9', borderRadius: '8px'}}>
-                        <p>Bạn chưa có đơn hàng nào.</p>
-                        <button onClick={() => navigate('/shop')}>Đặt món ngay</button>
+            {showReviewModal && (
+                <div className="modal-overlay" onClick={()=>setShowReviewModal(false)}>
+                    <div className="modal-content" onClick={e=>e.stopPropagation()}>
+                        <h3>Đánh giá đơn #{selectedOrder?.id}</h3>
+                        <div style={{textAlign:'center', margin:'20px 0'}}>
+                            {[1,2,3,4,5].map(s=>(
+                                <span key={s} className={`star-rating ${s<=reviewData.rating?'active':''}`} onClick={()=>setReviewData({...reviewData, rating:s})}>★</span>
+                            ))}
+                        </div>
+                        <textarea className="review-textarea" placeholder="Nhập bình luận..." value={reviewData.comment} onChange={e=>setReviewData({...reviewData, comment:e.target.value})} />
+                        <div style={{display:'flex', gap:'10px', marginTop:'20px'}}>
+                            <button onClick={()=>setShowReviewModal(false)} style={{flex:1}}>Đóng</button>
+                            <button onClick={submitReview} style={{flex:1, background:'green', color:'white'}}>Gửi</button>
+                        </div>
                     </div>
-                ) : (
-                    <div className="order-list">
-                        {orders.map(order => (
-                            <div key={order.id} style={{border: '1px solid #ddd', borderRadius: '8px', marginBottom: '20px', padding: '20px', background: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.05)'}}>
-                                <div style={{display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '10px'}}>
-                                    <div>
-                                        <strong>Đơn #{order.id}</strong> - <span style={{color: '#666'}}>{formatDate(order.created_at)}</span>
-                                    </div>
-                                    <div>{renderStatus(order.status)}</div>
-                                </div>
-
-                                <div style={{fontSize: '0.9rem', color: '#555', marginBottom: '10px'}}>
-                                    <p>📍 <b>Giao đến:</b> {order.user_name} ({order.customer_phone}) - {order.delivery_address}</p>
-                                    {order.note && <p>📝 <b>Ghi chú:</b> {order.note}</p>}
-                                </div>
-
-                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px'}}>
-                                    <span style={{fontSize: '1.2rem', fontWeight: 'bold', color: '#d32f2f'}}>
-                                        Tổng: {formatMoney(order.total_price)}
-                                    </span>
-
-                                    {/* LOGIC HIỂN THỊ NÚT HỦY */}
-                                    {/* Chỉ hiện khi đơn chưa giao (PENDING hoặc PAID) */}
-                                    {(order.status === 'PENDING_PAYMENT' || order.status === 'PAID') && (
-                                        <button 
-                                            onClick={() => handleCancelOrder(order.id)}
-                                            style={{
-                                                background: '#fff', 
-                                                border: '1px solid #dc3545', 
-                                                color: '#dc3545', 
-                                                padding: '5px 15px',
-                                                borderRadius: '4px',
-                                                cursor: 'pointer',
-                                                fontWeight: 'bold'
-                                            }}
-                                            onMouseOver={(e) => {e.target.style.background = '#dc3545'; e.target.style.color = 'white'}}
-                                            onMouseOut={(e) => {e.target.style.background = 'white'; e.target.style.color = '#dc3545'}}
-                                        >
-                                            Hủy đơn
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )
+                </div>
             )}
         </div>
     );
 }
-
 export default OrderHistory;

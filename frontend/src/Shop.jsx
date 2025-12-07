@@ -10,100 +10,61 @@ function Shop() {
     const [foodOptions, setFoodOptions] = useState([]);
     const navigate = useNavigate();
 
-    useEffect(() => {
-        fetchFoods();
-    }, []);
+    useEffect(() => { fetchFoods(); }, []);
 
     const fetchFoods = async (query = '') => {
         try {
             const res = await api.get(`/foods/search?q=${query}`);
             setFoods(res.data);
-        } catch (err) {
-            console.error(err);
-        }
+        } catch (err) { console.error(err); }
     };
 
-    const handleSearch = (e) => {
-        e.preventDefault();
-        fetchFoods(searchTerm);
-    };
+    const handleSearch = (e) => { e.preventDefault(); fetchFoods(searchTerm); };
 
     const handleViewOptions = async (foodName) => {
         try {
             const res = await api.get(`/foods/options?name=${foodName}`);
             setFoodOptions(res.data);
             setSelectedFood(foodName);
-        } catch (err) {
-            toast.error("Không tải được chi tiết món ăn");
-        }
+        } catch (err) { toast.error("Lỗi tải chi tiết"); }
     };
 
     const handleAddToCart = async (option) => {
-        const payload = {
-            food_id: option.food_id,
-            branch_id: option.branch_id,
-            quantity: 1
-        };
-
         try {
-            await api.post('/cart', payload);
-            toast.success(`Đã thêm "${selectedFood}" vào giỏ! 🛒`);
+            await api.post('/cart', { food_id: option.food_id, branch_id: option.branch_id, quantity: 1 });
+            toast.success(`Đã thêm vào giỏ! 🛒`);
             setSelectedFood(null);
-            
         } catch (err) {
-            if (err.response && err.response.status === 409) {
-                const confirmSwitch = window.confirm("⚠️ Giỏ hàng khác quán! Bạn có muốn XÓA GIỎ CŨ để thêm món mới?");
-                if (confirmSwitch) {
-                    try {
-                        await api.delete('/cart');
-                        await api.post('/cart', payload);
-                        toast.success("Đã tạo giỏ mới thành công! 🛒");
-                        setSelectedFood(null);
-                    } catch (retryErr) {
-                        toast.error("Lỗi khi tạo giỏ mới");
-                    }
+            if (err.response?.status === 409) {
+                if(window.confirm("Giỏ hàng khác quán! Xóa giỏ cũ?")) {
+                    await api.delete('/cart');
+                    await api.post('/cart', { food_id: option.food_id, branch_id: option.branch_id, quantity: 1 });
+                    toast.success("Đã tạo giỏ mới!");
+                    setSelectedFood(null);
                 }
-            } else {
-                toast.error(err.response?.data?.detail || "Lỗi thêm vào giỏ");
-            }
+            } else { toast.error("Lỗi thêm vào giỏ"); }
         }
     };
 
-    const handleLogout = () => {
-        localStorage.clear();
-        navigate('/');
-        toast.info("Đã đăng xuất.");
-    };
-
-    const formatMoney = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+    const handleLogout = () => { localStorage.clear(); navigate('/'); };
+    const formatMoney = (a) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(a);
 
     return (
         <div className="shop-container">
             <header className="shop-header">
                 <h2>🍔 Food Delivery</h2>
                 <div className="header-actions">
-                    {/* Nút vào Hồ sơ */}
-                    <button onClick={() => navigate('/profile')} style={{marginRight: '10px', background: '#6610f2'}}>
-                        👤 Hồ sơ
-                    </button>
-                    <button onClick={() => navigate('/history')} style={{marginRight: '10px', background: '#17a2b8'}}>
-                        📜 Lịch sử
-                    </button>
-                    <button className="cart-btn" onClick={() => navigate('/cart')}>
-                        Xem Giỏ hàng 🛒
-                    </button>
+                    <button onClick={() => navigate('/profile')}>👤 Hồ sơ</button>
+                    <button onClick={() => navigate('/history')}>📜 Lịch sử</button>
+                    <button onClick={() => navigate('/cart')}>Giỏ hàng 🛒</button>
                     <button onClick={handleLogout} className="logout-btn">Đăng xuất</button>
                 </div>
             </header>
 
             <div className="search-bar">
                 <form onSubmit={handleSearch}>
-                    <input 
-                        placeholder="Bạn muốn ăn gì hôm nay?..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                    <button type="submit">Tìm kiếm</button>
+                    <input placeholder="Tìm món ăn..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <button type="submit">Tìm</button>
                 </form>
             </div>
 
@@ -112,11 +73,19 @@ function Shop() {
                     <div key={index} className="food-card" onClick={() => handleViewOptions(food.name)}>
                         <div className="food-image-placeholder">🍖</div>
                         <h3>{food.name}</h3>
+                        
+                        {/* --- HIỂN THỊ SAO --- */}
+                        <div style={{color: '#f6c23e', marginBottom: '5px', fontSize: '0.9rem'}}>
+                            {food.avg_rating > 0 ? (
+                                <>★ <b>{food.avg_rating}</b> <span style={{color: '#999'}}>({food.review_count})</span></>
+                            ) : <span style={{color: '#ccc', fontSize: '0.8rem'}}>Chưa có đánh giá</span>}
+                        </div>
+                        {/* ------------------- */}
+
                         <p className="price-range">
-                            {formatMoney(food.min_price)} 
-                            {food.min_price !== food.max_price && ` - ${formatMoney(food.max_price)}`}
+                            {formatMoney(food.min_price)} {food.min_price !== food.max_price && ` - ${formatMoney(food.max_price)}`}
                         </p>
-                        <span className="badge">{food.branch_count} quán đang bán</span>
+                        <span className="badge">{food.branch_count} quán bán</span>
                     </div>
                 ))}
             </div>
@@ -124,7 +93,7 @@ function Shop() {
             {selectedFood && (
                 <div className="modal-overlay" onClick={() => setSelectedFood(null)}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
-                        <h3>Chọn quán bán: {selectedFood}</h3>
+                        <h3>Chọn quán: {selectedFood}</h3>
                         <button className="close-btn" onClick={() => setSelectedFood(null)}>×</button>
                         <div className="options-list">
                             {foodOptions.map((opt) => (
