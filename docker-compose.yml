@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # --- 1. MYSQL DATABASE ---
+  db:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456  # Mật khẩu root
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql # Lưu dữ liệu để không bị mất khi tắt máy
+
+  # --- 2. CÔNG CỤ QUẢN LÝ DB (Truy cập web) ---
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - "8080:8080" # Truy cập tại http://localhost:8080 để tạo DB
+
+  # --- 3. CÁC MICROSERVICES ---
+  user_service:
+    build: ./user_service
+    container_name: user_service
+    ports:
+      - "8001:8001"
+    env_file: 
+      - .env
+    depends_on:
+      - db
+    restart: always
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+
+  restaurant_service:
+    build: ./restaurant_service
+    container_name: restaurant_service
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    depends_on:
+      - db
+    restart: always
+    command: uvicorn main:app --host 0.0.0.0 --port 8002 --reload
+
+  order_service:
+    build: ./order_service
+    container_name: order_service
+    ports:
+      - "8003:8003"
+    env_file:  
+      - .env
+    depends_on:
+      - db
+    restart: always
+    command: uvicorn main:app --host 0.0.0.0 --port 8003 --reload
+
+  payment_service:
+    build: ./payment_service
+    container_name: payment_service
+    ports:
+      - "8004:8004"
+    env_file:  
+      - .env
+    depends_on:
+      - db
+    restart: always
+    command: uvicorn main:app --host 0.0.0.0 --port 8004 --reload
+
+  cart_service:
+    build: ./cart_service
+    container_name: cart_service
+    ports:
+      - "8005:8005"
+    env_file:  # <--- THÊM DÒNG NÀY
+      - .env
+    depends_on:
+      - db
+    restart: always
+    command: uvicorn main:app --host 0.0.0.0 --port 8005 --reload
+
+  gateway_service:
+    build: ./gateway_service
+    container_name: gateway_service
+    ports:
+      - "8000:8000"
+    env_file:  
+      - .env
+    depends_on:
+      - user_service
+      - restaurant_service
+      - order_service
+      - cart_service
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  mysql_data:
