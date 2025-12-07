@@ -110,3 +110,27 @@ button:hover { background: #0056b3; }
 .summary-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 1.1rem; }
 .summary-row.discount { color: #28a745; }
 .summary-row.total { font-size: 1.5rem; font-weight: bold; color: #d32f2f; border-top: 2px solid #ddd; padding-top: 10px; margin-top: 10px; }
+/* --- LOADING SPINNER --- */
+.spinner {
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top: 4px solid white;
+  width: 20px;
+  height: 20px;
+  -webkit-animation: spin 1s linear infinite; /* Safari */
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Khi nút đang loading thì làm mờ đi */
+button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}

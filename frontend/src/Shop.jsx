@@ -1,109 +1,94 @@
 import { useState, useEffect } from 'react';
-import api from './api';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import api from './api';
 
 function Shop() {
-    const [foods, setFoods] = useState([]);         // Danh sách món ăn (đã gom nhóm)
+    const [foods, setFoods] = useState([]);
     const [searchTerm, setSearchTerm] = useState(''); 
-    const [selectedFood, setSelectedFood] = useState(null); // Tên món đang chọn xem chi tiết
-    const [foodOptions, setFoodOptions] = useState([]);     // Các quán bán món đang chọn
+    const [selectedFood, setSelectedFood] = useState(null); 
+    const [foodOptions, setFoodOptions] = useState([]);
     const navigate = useNavigate();
 
-    // 1. Tải danh sách món ăn khi vào trang
     useEffect(() => {
         fetchFoods();
     }, []);
 
     const fetchFoods = async (query = '') => {
         try {
-            // Gọi API search của restaurant_service để lấy danh sách gom nhóm
             const res = await api.get(`/foods/search?q=${query}`);
             setFoods(res.data);
         } catch (err) {
-            console.error("Lỗi tải món ăn:", err);
+            console.error(err);
         }
     };
 
-    // 2. Xử lý tìm kiếm
     const handleSearch = (e) => {
         e.preventDefault();
         fetchFoods(searchTerm);
     };
 
-    // 3. Khi bấm vào một món -> Xem các quán bán món đó
     const handleViewOptions = async (foodName) => {
         try {
             const res = await api.get(`/foods/options?name=${foodName}`);
-            setFoodOptions(res.data); // Lưu danh sách các quán
-            setSelectedFood(foodName); // Mở Modal
+            setFoodOptions(res.data);
+            setSelectedFood(foodName);
         } catch (err) {
-            alert("Không tải được chi tiết món ăn");
+            toast.error("Không tải được chi tiết món ăn");
         }
     };
 
-    // 4. Hàm Thêm vào giỏ (QUAN TRỌNG: Xử lý khác quán)
     const handleAddToCart = async (option) => {
-        // Chuẩn bị dữ liệu gửi đi
         const payload = {
             food_id: option.food_id,
-            branch_id: option.branch_id, // Bắt buộc phải có để backend check
+            branch_id: option.branch_id,
             quantity: 1
         };
 
         try {
-            // Thử thêm vào giỏ
             await api.post('/cart', payload);
-            alert("Đã thêm vào giỏ thành công!");
-            setSelectedFood(null); // Đóng modal
+            toast.success(`Đã thêm "${selectedFood}" vào giỏ! 🛒`);
+            setSelectedFood(null);
             
         } catch (err) {
-            // Xử lý lỗi logic: Khác quán (Lỗi 409 từ backend)
             if (err.response && err.response.status === 409) {
-                const confirmSwitch = window.confirm(
-                    "⚠️ Giỏ hàng đang chứa món của quán khác!\n\nBạn có muốn XÓA GIỎ HÀNG CŨ để thêm món của quán này không?"
-                );
-
+                const confirmSwitch = window.confirm("⚠️ Giỏ hàng khác quán! Bạn có muốn XÓA GIỎ CŨ để thêm món mới?");
                 if (confirmSwitch) {
                     try {
-                        // 1. Xóa giỏ cũ
                         await api.delete('/cart');
-                        // 2. Thêm lại món mới
                         await api.post('/cart', payload);
-                        alert("Đã tạo giỏ hàng mới thành công!");
+                        toast.success("Đã tạo giỏ mới thành công! 🛒");
                         setSelectedFood(null);
                     } catch (retryErr) {
-                        alert("Lỗi khi tạo giỏ mới: " + retryErr.message);
+                        toast.error("Lỗi khi tạo giỏ mới");
                     }
                 }
             } else {
-                // Các lỗi khác (401, 500...)
-                alert("Lỗi: " + (err.response?.data?.detail || "Không thể thêm vào giỏ"));
+                toast.error(err.response?.data?.detail || "Lỗi thêm vào giỏ");
             }
         }
     };
 
-    // 5. Đăng xuất
     const handleLogout = () => {
         localStorage.clear();
         navigate('/');
+        toast.info("Đã đăng xuất.");
     };
 
-    // --- Helper: Định dạng tiền tệ VND ---
-    const formatMoney = (amount) => {
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
-    };
+    const formatMoney = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 
     return (
         <div className="shop-container">
-            {/* --- HEADER --- */}
             <header className="shop-header">
                 <h2>🍔 Food Delivery</h2>
                 <div className="header-actions">
-                    {/* Nút Lịch sử */}
+                    {/* Nút vào Hồ sơ */}
+                    <button onClick={() => navigate('/profile')} style={{marginRight: '10px', background: '#6610f2'}}>
+                        👤 Hồ sơ
+                    </button>
                     <button onClick={() => navigate('/history')} style={{marginRight: '10px', background: '#17a2b8'}}>
                         📜 Lịch sử
                     </button>
-                    {/* Bấm nút này sẽ chuyển sang trang Giỏ hàng */}
                     <button className="cart-btn" onClick={() => navigate('/cart')}>
                         Xem Giỏ hàng 🛒
                     </button>
@@ -111,7 +96,6 @@ function Shop() {
                 </div>
             </header>
 
-            {/* --- SEARCH BAR --- */}
             <div className="search-bar">
                 <form onSubmit={handleSearch}>
                     <input 
@@ -123,7 +107,6 @@ function Shop() {
                 </form>
             </div>
 
-            {/* --- DANH SÁCH MÓN ĂN (GRID) --- */}
             <div className="food-grid">
                 {foods.map((food, index) => (
                     <div key={index} className="food-card" onClick={() => handleViewOptions(food.name)}>
@@ -138,13 +121,11 @@ function Shop() {
                 ))}
             </div>
 
-            {/* --- MODAL CHI TIẾT (Chọn quán) --- */}
             {selectedFood && (
                 <div className="modal-overlay" onClick={() => setSelectedFood(null)}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
                         <h3>Chọn quán bán: {selectedFood}</h3>
                         <button className="close-btn" onClick={() => setSelectedFood(null)}>×</button>
-                        
                         <div className="options-list">
                             {foodOptions.map((opt) => (
                                 <div key={opt.food_id} className="option-item">
