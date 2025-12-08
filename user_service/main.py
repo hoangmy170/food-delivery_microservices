@@ -5,9 +5,10 @@ import models
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import List, Optional
 import os
+import re
 
 SECRET_KEY = os.getenv("SECRET_KEY", "chuoi_mac_dinh_phong_khi_quen_set_env")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
@@ -46,6 +47,39 @@ class UserCreate(BaseModel):
     phone: str = None
     address: str = None
     seller_mode: str = None # Mới
+
+    # 1. Validate Email
+    @validator('email')
+    def validate_email(cls, v):
+        regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(regex, v):
+            raise ValueError('Email không hợp lệ')
+        return v
+
+    # 2. Validate Số điện thoại
+    @validator('phone')
+    def validate_phone(cls, v):
+        if v is None: return v
+        # Số VN: 10 số, bắt đầu bằng 0
+        regex = r'^0\d{9}$'
+        if not re.match(regex, v):
+            raise ValueError('Số điện thoại không hợp lệ (Phải có 10 số, bắt đầu bằng 0)')
+        return v
+
+    # 3. Validate Password (Độ mạnh)
+    @validator('password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Mật khẩu phải có ít nhất 8 ký tự')
+        if not re.search(r"[A-Z]", v):
+            raise ValueError('Mật khẩu phải có ít nhất 1 chữ in hoa')
+        if not re.search(r"[a-z]", v):
+            raise ValueError('Mật khẩu phải có ít nhất 1 chữ thường')
+        if not re.search(r"\d", v):
+            raise ValueError('Mật khẩu phải có ít nhất 1 số')
+        if not re.search(r"[@$!%*?&]", v):
+            raise ValueError('Mật khẩu phải có ít nhất 1 ký tự đặc biệt (@$!%*?&)')
+        return v
 
 class LoginRequest(BaseModel):
     email: str

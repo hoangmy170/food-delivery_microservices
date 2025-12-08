@@ -1,160 +1,156 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { FaEye, FaEyeSlash } from 'react-icons/fa'; // Import icon con mắt
 import api from './api';
+import './Register.css'; // Import file CSS vừa tạo
 
 function Register() {
-    // 1. Khai báo các biến lưu trữ dữ liệu nhập vào
     const [formData, setFormData] = useState({
         name: '',
         phone: '',
         email: '',
         password: '',
-        confirmPassword: '' // Dùng để kiểm tra khớp mật khẩu
+        confirmPassword: ''
     });
     
-    // Biến lưu thông báo lỗi để hiện lên màn hình
     const [error, setError] = useState('');
-    
+    // State để quản lý việc hiện/ẩn mật khẩu
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
     const navigate = useNavigate();
 
-    // 2. Hàm xử lý khi người dùng gõ phím
+    // --- CÁC HÀM KIỂM TRA (VALIDATORS) ---
+    const validators = {
+        email: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+        phone: (phone) => /(03|05|07|08|09|01[2|6|8|9])+([0-9]{8})\b|0\d{9}/.test(phone) && phone.length === 10,
+        password: (pass) => /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(pass)
+    };
+
     const handleChange = (e) => {
         setFormData({...formData, [e.target.name]: e.target.value});
     };
 
-    // 3. Hàm xử lý khi bấm nút Đăng ký
+    // Hàm toggle hiện/ẩn mật khẩu
+    const togglePasswordVisibility = (field) => {
+        if (field === 'password') {
+            setShowPassword(!showPassword);
+        } else if (field === 'confirmPassword') {
+            setShowConfirmPassword(!showConfirmPassword);
+        }
+    };
+
     const handleRegister = async (e) => {
         e.preventDefault();
-        setError(''); // Xóa lỗi cũ trước khi gửi
+        setError('');
 
-        // --- Kiểm tra mật khẩu nhập lại ---
-        if (formData.password !== formData.confirmPassword) {
-            setError("Mật khẩu xác nhận không khớp!");
-            return;
-        }
+        // --- KIỂM TRA DỮ LIỆU ---
+        if (!validators.email(formData.email)) return setError("Địa chỉ Email không hợp lệ!");
+        if (!validators.phone(formData.phone)) return setError("Số điện thoại không hợp lệ (10 số, bắt đầu bằng 0)!");
+        if (!validators.password(formData.password)) return setError("Mật khẩu quá yếu! Cần 8 ký tự, có hoa, thường, số & ký tự đặc biệt.");
+        if (formData.password !== formData.confirmPassword) return setError("Mật khẩu xác nhận không khớp!");
 
         try {
-            // --- Chuẩn bị gói tin gửi đi ---
             const payload = { 
-                name: formData.name,
-                phone: formData.phone,
-                email: formData.email,
-                password: formData.password,
-                role: 'buyer',      // Mặc định là khách hàng
-                address: ""         // Gửi chuỗi rỗng để tránh lỗi 422
+                name: formData.name, phone: formData.phone, email: formData.email,
+                password: formData.password, role: 'buyer', address: ""
             };
-            
-            // Gọi API đăng ký
             await api.post('/register', payload);
-            
-            // Nếu thành công:
             alert("Đăng ký thành công! Bạn có thể đăng nhập ngay.");
-            navigate('/'); // Chuyển về trang Login
+            navigate('/'); 
 
         } catch (err) {
-            console.error("Chi tiết lỗi:", err); // Xem lỗi kỹ hơn ở Console (F12)
-
-            // --- XỬ LÝ LỖI KHÔNG BỊ SẬP TRANG ---
+            console.error("Lỗi đăng ký:", err);
             let errorMsg = "Đăng ký thất bại. Vui lòng thử lại.";
-
             if (err.response && err.response.data) {
                 const detail = err.response.data.detail;
-
-                if (Array.isArray(detail)) {
-                    // Đây là lỗi 422 (Validation Error)
-                    // Ví dụ: Lỗi định dạng email
-                    const firstError = detail[0];
-                    // Lấy tên trường bị lỗi (ví dụ: email, phone...)
-                    const fieldName = firstError.loc[firstError.loc.length - 1]; 
-                    errorMsg = `Lỗi ở trường '${fieldName}': ${firstError.msg}`;
-                } else if (typeof detail === 'string') {
-                    // Lỗi thông thường (400, 401...)
-                    errorMsg = detail;
-                } else {
-                    // Lỗi dạng Object khác
-                    errorMsg = JSON.stringify(detail);
-                }
+                errorMsg = Array.isArray(detail) ? detail[0].msg : (typeof detail === 'string' ? detail : JSON.stringify(detail));
             } else if (err.message) {
                 errorMsg = err.message;
             }
-
             setError(errorMsg);
         }
     };
 
     return (
-        <div className="container">
-            <h2>Đăng ký Tài khoản</h2>
-            
-            <form onSubmit={handleRegister} className="auth-form">
-                {/* Họ tên */}
-                <input 
-                    name="name" 
-                    placeholder="Họ và tên" 
-                    value={formData.name}
-                    onChange={handleChange} 
-                    required 
-                />
-
-                {/* Số điện thoại */}
-                <input 
-                    name="phone" 
-                    placeholder="Số điện thoại" 
-                    value={formData.phone}
-                    onChange={handleChange} 
-                    required 
-                />
-
-                {/* Email */}
-                <input 
-                    name="email" 
-                    type="email" 
-                    placeholder="Email" 
-                    value={formData.email}
-                    onChange={handleChange} 
-                    required 
-                />
-
-                {/* Mật khẩu */}
-                <input 
-                    name="password" 
-                    type="password" 
-                    placeholder="Mật khẩu" 
-                    value={formData.password}
-                    onChange={handleChange} 
-                    required 
-                />
-
-                {/* Nhập lại mật khẩu */}
-                <input 
-                    name="confirmPassword" 
-                    type="password" 
-                    placeholder="Nhập lại mật khẩu" 
-                    value={formData.confirmPassword}
-                    onChange={handleChange} 
-                    required 
-                />
+        <div className="register-container">
+            <div className="register-box">
+                <h2>Đăng ký Tài khoản</h2>
                 
-                {/* Khu vực hiển thị lỗi */}
-                {error && (
-                    <div style={{
-                        color: '#721c24', 
-                        backgroundColor: '#f8d7da', 
-                        padding: '10px', 
-                        borderRadius: '4px',
-                        fontSize: '14px',
-                        marginTop: '10px'
-                    }}>
-                        ⚠️ {error}
+                <form onSubmit={handleRegister} className="auth-form">
+                    {/* Họ tên */}
+                    <div className="input-group">
+                        <input 
+                            className="input-field" name="name" placeholder="Họ và tên" required 
+                            value={formData.name} onChange={handleChange} 
+                        />
                     </div>
-                )}
 
-                <button type="submit" style={{marginTop: '15px'}}>Đăng ký ngay</button>
-            </form>
+                    {/* Số điện thoại */}
+                    <div className="input-group">
+                        <input 
+                            className="input-field" name="phone" placeholder="Số điện thoại" required 
+                            value={formData.phone} onChange={handleChange} 
+                        />
+                    </div>
 
-            <p style={{marginTop: '15px'}}>
-                Đã có tài khoản? <Link to="/">Đăng nhập</Link>
-            </p>
+                    {/* Email */}
+                    <div className="input-group">
+                        <input 
+                            className="input-field" name="email" type="email" placeholder="Email" required 
+                            value={formData.email} onChange={handleChange} 
+                        />
+                    </div>
+
+                    {/* Mật khẩu */}
+                    <div className="input-group">
+                        <div className="password-wrapper">
+                            <input 
+                                className="input-field" name="password" 
+                                type={showPassword ? "text" : "password"} // Đổi type dựa trên state
+                                placeholder="Mật khẩu" required 
+                                value={formData.password} onChange={handleChange} 
+                            />
+                            {/* Nút con mắt */}
+                            <button type="button" className="toggle-password-btn" onClick={() => togglePasswordVisibility('password')}>
+                                {showPassword ? <FaEyeSlash /> : <FaEye />}
+                            </button>
+                        </div>
+                        <small className="password-hint">
+                            * Tối thiểu 8 ký tự, gồm: Hoa, thường, số & ký tự đặc biệt (@$!%*?&)
+                        </small>
+                    </div>
+
+                    {/* Nhập lại mật khẩu */}
+                    <div className="input-group">
+                        <div className="password-wrapper">
+                            <input 
+                                className="input-field" name="confirmPassword" 
+                                type={showConfirmPassword ? "text" : "password"} // Đổi type dựa trên state
+                                placeholder="Nhập lại mật khẩu" required 
+                                value={formData.confirmPassword} onChange={handleChange} 
+                            />
+                            {/* Nút con mắt */}
+                            <button type="button" className="toggle-password-btn" onClick={() => togglePasswordVisibility('confirmPassword')}>
+                                {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* Khu vực hiển thị lỗi */}
+                    {error && (
+                        <div className="error-message">
+                            ⚠️ <span>{error}</span>
+                        </div>
+                    )}
+
+                    <button type="submit" className="submit-btn">Đăng ký ngay</button>
+                </form>
+
+                <p className="login-link-text">
+                    Đã có tài khoản? <Link to="/">Đăng nhập</Link>
+                </p>
+            </div>
         </div>
     );
 }
