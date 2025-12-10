@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { FaTrash, FaMinus, FaPlus, FaArrowLeft, FaShoppingBag } from "react-icons/fa"; 
 import api from './api';
 
 const API_URL = "http://localhost:8000";
@@ -30,13 +31,12 @@ function Cart() {
 
             const enrichedItems = await Promise.all(items.map(async (item) => {
                 try {
-                    // API này của restaurant_service trả về đầy đủ food info gồm cả image_url
                     const foodDetail = await api.get(`/foods/${item.food_id}`);
                     return {
                         ...item,
                         name: foodDetail.data.name,
                         price: foodDetail.data.price,
-                        image_url: foodDetail.data.image_url // Lấy ảnh
+                        image_url: foodDetail.data.image_url
                     };
                 } catch (e) { return { ...item, name: "Món đã xóa", price: 0 }; }
             }));
@@ -58,15 +58,29 @@ function Cart() {
             const updatedItems = cartItems.map(item => item.food_id === foodId ? { ...item, quantity: newQty } : item);
             setCartItems(updatedItems);
             calculateSubTotal(updatedItems);
-        } catch (err) { toast.error("Lỗi cập nhật số lượng"); }
+        } catch (err) { toast.error("Lỗi cập nhật"); }
+    };
+
+    const removeItem = async (foodId) => {
+        if(!window.confirm("Xóa món này khỏi giỏ?")) return;
+        try {
+            // Lưu ý: API hiện tại của bạn là xóa hết. Nếu backend hỗ trợ xóa 1 món thì gọi API đó.
+            // Ở đây mình giả lập xóa trên giao diện trước
+            const updatedItems = cartItems.filter(item => item.food_id !== foodId);
+            setCartItems(updatedItems);
+            calculateSubTotal(updatedItems);
+            // Gọi API thực tế (nếu có): await api.delete(`/cart/${foodId}`); 
+            // Hiện tại dùng tạm xóa all nếu backend chưa update:
+            if(updatedItems.length === 0) await api.delete('/cart');
+        } catch(err) { toast.error("Lỗi xóa món"); }
     };
 
     const clearCart = async () => {
-        if (!window.confirm("Xóa hết giỏ hàng?")) return;
+        if (!window.confirm("Bạn chắc chắn muốn xóa hết giỏ hàng?")) return;
         try {
             await api.delete('/cart');
             setCartItems([]); setSubTotal(0); setAppliedCoupon(null);
-            toast.info("Đã xóa giỏ hàng");
+            toast.info("Đã làm sạch giỏ hàng");
         } catch (err) { toast.error("Lỗi xóa giỏ"); }
     };
 
@@ -77,19 +91,14 @@ function Cart() {
         try {
             const res = await api.get('/coupons/verify', { params: { code: couponCode, branch_id: currentBranchId } });
             setAppliedCoupon(res.data);
-            toast.success(`Áp dụng mã ${res.data.code} thành công!`);
-        } catch (err) { setAppliedCoupon(null); toast.error(err.response?.data?.detail || "Mã không hợp lệ"); }
+            toast.success(`Mã giảm giá ${res.data.code} đã được áp dụng!`);
+        } catch (err) { setAppliedCoupon(null); toast.error("Mã không hợp lệ hoặc hết hạn"); }
     };
 
     const handleCheckout = () => {
         if (cartItems.length === 0) return toast.warning("Giỏ trống!");
         navigate('/checkout', {
-            state: {
-                items: cartItems, // items này đã có image_url
-                coupon: appliedCoupon,
-                final_price: totalPrice,
-                branch_id: cartItems[0].branch_id
-            }
+            state: { items: cartItems, coupon: appliedCoupon, final_price: totalPrice, branch_id: cartItems[0].branch_id }
         });
     };
 
@@ -97,48 +106,106 @@ function Cart() {
 
     return (
         <div className="cart-container">
-            <h2>🛒 Giỏ hàng của bạn</h2>
-            <button className="back-btn" onClick={() => navigate('/shop')}>← Tiếp tục mua sắm</button>
+            {/* Header */}
+            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'30px'}}>
+                <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
+                    <button onClick={() => navigate('/shop')} className="icon-btn" title="Quay lại"><FaArrowLeft /></button>
+                    <h2 style={{margin:0, display:'flex', alignItems:'center', gap:'12px', color: '#333'}}>
+                        <FaShoppingBag color="#ff6347"/> Giỏ hàng
+                    </h2>
+                </div>
+                {cartItems.length > 0 && 
+                    <button onClick={clearCart} style={{color:'#ff4757', background:'white', border:'1px solid #ff4757', padding:'8px 15px', borderRadius:'20px', cursor:'pointer', fontWeight:'600', transition:'0.2s'}}>
+                        Xóa tất cả
+                    </button>
+                }
+            </div>
 
             {cartItems.length === 0 ? (
-                <div className="empty-cart"><p>Giỏ hàng trống trơn...</p><button onClick={() => navigate('/shop')}>Đi mua ngay</button></div>
+                <div className="empty-cart" style={{textAlign:'center', padding:'60px 20px'}}>
+                    <img src="https://cdn-icons-png.flaticon.com/512/11329/11329060.png" alt="Empty" style={{width:'120px', opacity:0.6, marginBottom:'20px'}}/>
+                    <h3 style={{color:'#555', margin:'0 0 10px'}}>Giỏ hàng của bạn đang trống</h3>
+                    <p style={{color:'#888', marginBottom:'30px'}}>Hãy chọn thêm vài món ngon nhé!</p>
+                    <button onClick={() => navigate('/shop')} className="checkout-btn" style={{width:'auto', padding:'12px 40px', marginTop:0}}>Quay lại thực đơn</button>
+                </div>
             ) : (
                 <div className="cart-content">
                     <table className="cart-table">
-                        <thead><tr><th>Món ăn</th><th>Đơn giá</th><th>Số lượng</th><th>Thành tiền</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th style={{textAlign:'center', width:'60px'}}>STT</th>
+                                <th>Món ăn</th>
+                                <th style={{width:'150px'}}>Đơn giá</th>
+                                <th style={{width:'160px'}}>Số lượng</th>
+                                <th style={{width:'150px'}}>Thành tiền</th>
+                                <th style={{width:'60px'}}></th>
+                            </tr>
+                        </thead>
                         <tbody>
-                            {cartItems.map((item) => (
+                            {cartItems.map((item, index) => (
                                 <tr key={item.food_id}>
+                                    <td style={{textAlign:'center', color:'#999', fontWeight:'bold'}}>{index + 1}</td>
+                                    
                                     <td>
-                                        {/* HIỂN THỊ ẢNH NHỎ */}
-                                        {item.image_url && <img src={`${API_URL}${item.image_url}`} className="cart-thumb" alt="" />}
-                                        <strong>{item.name}</strong>
-                                    </td>
-                                    <td>{formatMoney(item.price)}</td>
-                                    <td>
-                                        <div className="qty-control">
-                                            <button onClick={() => updateQuantity(item.food_id, item.quantity - 1)}>-</button>
-                                            <span>{item.quantity}</span>
-                                            <button onClick={() => updateQuantity(item.food_id, item.quantity + 1)}>+</button>
+                                        <div style={{display:'flex', alignItems:'center', gap:'20px'}}>
+                                            {item.image_url ? (
+                                                <img src={`${API_URL}${item.image_url}`} className="cart-thumb" alt="" />
+                                            ) : (
+                                                <div className="cart-thumb" style={{background:'#eee', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem'}}>🍖</div>
+                                            )}
+                                            <div style={{display:'flex', flexDirection:'column'}}>
+                                                <span style={{fontWeight:'700', fontSize:'1.1rem', color:'#333'}}>{item.name}</span>
+                                                <span style={{fontSize:'0.85rem', color:'#888'}}>Mã món: #{item.food_id}</span>
+                                            </div>
                                         </div>
                                     </td>
-                                    <td>{formatMoney(item.price * item.quantity)}</td>
+                                    
+                                    <td style={{fontWeight:'500', color:'#555'}}>{formatMoney(item.price)}</td>
+                                    
+                                    <td>
+                                        <div className="qty-control">
+                                            <button className="qty-btn" onClick={() => updateQuantity(item.food_id, item.quantity - 1)}><FaMinus size={10}/></button>
+                                            <span className="qty-value">{item.quantity}</span>
+                                            <button className="qty-btn" onClick={() => updateQuantity(item.food_id, item.quantity + 1)}><FaPlus size={10}/></button>
+                                        </div>
+                                    </td>
+                                    
+                                    <td style={{fontWeight:'800', color:'#ff6347', fontSize:'1.1rem'}}>{formatMoney(item.price * item.quantity)}</td>
+                                    
+                                    <td style={{textAlign:'center'}}>
+                                        <button className="btn-remove" onClick={() => removeItem(item.food_id)} title="Xóa món này"><FaTrash size={16}/></button>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
+
                     <div className="cart-summary-box">
+                        <h3 style={{marginTop:0, marginBottom:'20px'}}>Tổng kết đơn hàng</h3>
+                        
                         <div className="coupon-section">
-                            <input placeholder="Nhập mã giảm giá" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} />
+                            <input placeholder="Mã giảm giá (VD: SALE50)" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} />
                             <button onClick={handleApplyCoupon}>Áp dụng</button>
                         </div>
-                        <div className="summary-row"><span>Tạm tính:</span><span>{formatMoney(subTotal)}</span></div>
-                        {appliedCoupon && <div className="summary-row discount"><span>Giảm giá ({appliedCoupon.code}):</span><span>- {formatMoney(subTotal * appliedCoupon.discount_percent / 100)}</span></div>}
-                        <div className="summary-row total"><span>Tổng cộng:</span><span>{formatMoney(totalPrice)}</span></div>
-                        <div className="cart-actions">
-                            <button className="clear-btn" onClick={clearCart}>Xóa giỏ</button>
-                            <button className="checkout-btn" onClick={handleCheckout}>Tiến hành Đặt hàng</button>
+                        
+                        <div className="summary-row">
+                            <span>Tạm tính</span>
+                            <span style={{fontWeight:'600'}}>{formatMoney(subTotal)}</span>
                         </div>
+                        
+                        {appliedCoupon && (
+                            <div className="summary-row" style={{color:'#27ae60'}}>
+                                <span>Giảm giá ({appliedCoupon.code})</span>
+                                <span>- {formatMoney(subTotal * appliedCoupon.discount_percent / 100)}</span>
+                            </div>
+                        )}
+                        
+                        <div className="summary-row total">
+                            <span>Tổng tiền</span>
+                            <span style={{color:'#ff4757'}}>{formatMoney(totalPrice)}</span>
+                        </div>
+
+                        <button className="checkout-btn" onClick={handleCheckout}>Tiến hành thanh toán</button>
                     </div>
                 </div>
             )}

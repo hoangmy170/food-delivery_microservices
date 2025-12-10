@@ -2,100 +2,64 @@ import { useState, useEffect } from 'react';
 import api from './api';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { FaArrowLeft } from "react-icons/fa"; // Import Icon
 
 function Profile() {
     const [addresses, setAddresses] = useState([]);
-    // Thêm trường name
     const [newAddress, setNewAddress] = useState({ title: '', name: '', address: '', phone: '' });
     const navigate = useNavigate();
 
-    useEffect(() => {
-        fetchAddresses();
-    }, []);
+    useEffect(() => { fetchAddresses(); }, []);
 
     const fetchAddresses = async () => {
         const token = localStorage.getItem('access_token');
         if (!token) return;
-
         try {
-            const res = await api.get('/users/addresses', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await api.get('/users/addresses', { headers: { Authorization: `Bearer ${token}` } });
             setAddresses(res.data);
-        } catch (err) {
-            console.error(err);
-        }
+        } catch (err) { console.error(err); }
     };
 
     const handleAddAddress = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem('access_token');
-        
         try {
-            await api.post('/users/addresses', newAddress, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await api.post('/users/addresses', newAddress, { headers: { Authorization: `Bearer ${token}` } });
             toast.success("Thêm địa chỉ thành công! 🏠");
-            setNewAddress({ title: '', name: '', address: '', phone: '' }); // Reset form
-            fetchAddresses(); // Tải lại danh sách
+            setNewAddress({ title: '', name: '', address: '', phone: '' }); 
+            fetchAddresses();
         } catch (err) {
              let msg = "Lỗi thêm địa chỉ";
-             if (err.response && err.response.data && err.response.data.detail) {
-                 // Nếu lỗi validation từ backend trả về
-                 if (Array.isArray(err.response.data.detail)) {
-                    msg = err.response.data.detail[0].msg;
-                 } else {
-                    msg = err.response.data.detail;
-                 }
-             }
+             if (err.response?.data?.detail) msg = Array.isArray(err.response.data.detail) ? err.response.data.detail[0].msg : err.response.data.detail;
              toast.error(msg);
         }
     };
 
     return (
         <div className="container" style={{maxWidth: '900px'}}>
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
-                <h2>👤 Hồ sơ cá nhân</h2>
-                <button onClick={() => navigate('/shop')}>← Quay lại mua sắm</button>
+            {/* --- HEADER NÂNG CẤP --- */}
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px', borderBottom: '1px solid #eee', paddingBottom: '10px'}}>
+                <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
+                    <button onClick={() => navigate('/shop')} className="icon-btn" title="Quay lại mua sắm">
+                        <FaArrowLeft size={20} />
+                    </button>
+                    <h2 style={{margin:0}}>👤 Hồ sơ cá nhân</h2>
+                </div>
+                <h2 style={{color: '#ff6347', fontWeight: '900', fontFamily: 'Arial', margin:0}}>FOOD ORDER</h2>
             </div>
 
             <div className="profile-layout" style={{display: 'flex', gap: '30px', flexWrap: 'wrap'}}>
-                
-                {/* CỘT TRÁI: THÊM ĐỊA CHỈ MỚI */}
                 <div style={{flex: 1, minWidth: '350px'}}>
                     <h3>Thêm địa chỉ mới</h3>
                     <form onSubmit={handleAddAddress} className="auth-form">
-                        <input 
-                            placeholder="Tên gợi nhớ (VD: Nhà riêng, Công ty)" 
-                            value={newAddress.title}
-                            onChange={e => setNewAddress({...newAddress, title: e.target.value})}
-                            required 
-                        />
-                        {/* INPUT MỚI: TÊN NGƯỜI NHẬN */}
-                        <input 
-                            placeholder="Họ và tên người nhận" 
-                            value={newAddress.name}
-                            onChange={e => setNewAddress({...newAddress, name: e.target.value})}
-                            required 
-                        />
-                        <input 
-                            placeholder="Số điện thoại (10 số)" 
-                            value={newAddress.phone}
-                            onChange={e => setNewAddress({...newAddress, phone: e.target.value})}
-                            required 
-                        />
-                        <textarea 
-                            placeholder="Địa chỉ chi tiết (Số nhà, đường...)" 
-                            value={newAddress.address}
-                            onChange={e => setNewAddress({...newAddress, address: e.target.value})}
-                            required
-                            style={{width: '100%', padding: '10px', height: '80px', marginBottom: '10px'}}
-                        />
+                        <input placeholder="Tên gợi nhớ (VD: Nhà riêng, Công ty)" value={newAddress.title} onChange={e => setNewAddress({...newAddress, title: e.target.value})} required />
+                        <input placeholder="Họ và tên người nhận" value={newAddress.name} onChange={e => setNewAddress({...newAddress, name: e.target.value})} required />
+                        <input placeholder="Số điện thoại (10 số)" value={newAddress.phone} onChange={e => setNewAddress({...newAddress, phone: e.target.value})} required />
+                        <textarea placeholder="Địa chỉ chi tiết (Số nhà, đường...)" value={newAddress.address} onChange={e => setNewAddress({...newAddress, address: e.target.value})} required style={{width: '100%', padding: '10px', height: '80px', marginBottom: '10px'}} />
                         <button type="submit">Lưu địa chỉ</button>
                     </form>
                 </div>
 
-                {/* CỘT PHẢI: DANH SÁCH ĐỊA CHỈ */}
                 <div style={{flex: 1, minWidth: '350px'}}>
                     <h3>Sổ địa chỉ của tôi</h3>
                     {addresses.length === 0 ? <p>Chưa có địa chỉ nào được lưu.</p> : (

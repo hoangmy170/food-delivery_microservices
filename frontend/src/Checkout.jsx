@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { FaArrowLeft, FaMapMarkerAlt, FaFileInvoiceDollar, FaUser, FaPhone, FaStickyNote } from "react-icons/fa"; 
 import api from './api';
 
 const API_URL = "http://localhost:8000";
@@ -14,7 +15,6 @@ function Checkout() {
     const [branchName, setBranchName] = useState('Đang tải...');
     const [savedAddresses, setSavedAddresses] = useState([]); 
     const [loading, setLoading] = useState(false);
-    const [step, setStep] = useState(1); 
 
     useEffect(() => {
         if (!items || items.length === 0) { navigate('/shop'); return; }
@@ -36,14 +36,13 @@ function Checkout() {
         if (!addrId) return;
         const selected = savedAddresses.find(a => a.id == addrId);
         if (selected) {
-            // [CẬP NHẬT] Điền cả tên người nhận
             setCustomerInfo(prev => ({ 
                 ...prev, 
                 name: selected.name, 
                 phone: selected.phone, 
                 address: selected.address 
             }));
-            toast.info(`Đã chọn: ${selected.title}`);
+            toast.info(`Đã điền: ${selected.title}`);
         }
     };
 
@@ -58,7 +57,7 @@ function Checkout() {
 
     const handleConfirmOrder = async () => {
         if (!customerInfo.address || !customerInfo.phone || !customerInfo.name) {
-            toast.warning("Vui lòng điền đầy đủ thông tin! ✍️");
+            toast.warning("Thiếu thông tin giao hàng! ✍️");
             return;
         }
         setLoading(true);
@@ -76,19 +75,17 @@ function Checkout() {
                 note: customerInfo.note
             };
             
-            // Gọi API tạo đơn
             const orderRes = await api.post('/checkout', orderPayload);
             const { order_id, total_price } = orderRes.data;
 
-            toast.info("Đang chuyển sang cổng thanh toán...");
+            toast.info("Đang chuyển sang thanh toán...");
             navigate('/payment', { 
                 state: { order_id: order_id, total_price: total_price } 
             });
-            return; 
 
         } catch (err) {
             console.error(err);
-            toast.error("Lỗi xử lý đơn hàng");
+            toast.error("Lỗi đặt hàng. Thử lại sau!");
         } finally {
             setLoading(false);
         }
@@ -98,80 +95,122 @@ function Checkout() {
     if (!items) return null;
 
     return (
-        <div className="container" style={{maxWidth: '900px'}}>
-            {step === 1 && (
-                <div className="checkout-layout" style={{display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
-                    <div className="info-section" style={{flex: 1, minWidth: '350px'}}>
-                        <h2>📍 Thông tin giao hàng</h2>
-                        
-                        {/* Dropdown chọn nhanh */}
-                        {savedAddresses.length > 0 && (
-                            <div style={{marginBottom: '15px', padding: '15px', background: '#e9ecef', borderRadius: '8px', border: '1px solid #dee2e6'}}>
-                                <label style={{fontWeight: 'bold', display:'block', marginBottom:'5px'}}>⚡ Chọn nhanh từ sổ địa chỉ:</label>
-                                <select onChange={handleSelectAddress} style={{width: '100%', padding: '10px', borderRadius:'4px', border:'1px solid #ced4da'}}>
-                                    <option value="">-- Chọn địa chỉ --</option>
-                                    {savedAddresses.map(addr => (
-                                        <option key={addr.id} value={addr.id}>
-                                            {addr.title} - {addr.name} ({addr.phone})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
+        // CONTAINER FULL WIDTH (Ghi đè style cũ)
+        <div style={{
+            width: '98vw', // Chiếm 98% chiều rộng màn hình
+            margin: '10px auto', // Canh giữa, cách trên một chút
+            background: 'white',
+            borderRadius: '8px',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+            padding: '20px',
+            boxSizing: 'border-box',
+            minHeight: '90vh'
+        }}>
+             {/* Header Gọn gàng */}
+             <div style={{display:'flex', alignItems:'center', borderBottom:'1px solid #eee', paddingBottom:'10px', marginBottom:'20px'}}>
+                <button onClick={() => navigate('/cart')} className="icon-btn" title="Quay lại" style={{width:'40px', height:'40px'}}><FaArrowLeft /></button>
+                <h2 style={{marginLeft:'15px', textTransform:'uppercase', color:'#ff6347', fontSize:'1.5rem', margin: 0}}>Xác nhận đặt hàng</h2>
+            </div>
 
-                        <div className="auth-form">
-                            <label>Họ tên người nhận:</label>
-                            <input name="name" value={customerInfo.name} onChange={handleChange} placeholder="Nguyễn Văn A" />
-                            
-                            <label>Số điện thoại:</label>
-                            <input name="phone" value={customerInfo.phone} onChange={handleChange} placeholder="098..." />
-                            
-                            <label>Địa chỉ nhận hàng:</label>
-                            <textarea name="address" value={customerInfo.address} onChange={handleChange} placeholder="Số nhà, đường..." style={{width:'100%', padding:'10px', height:'80px'}} />
-                            
-                            <label>Ghi chú (tùy chọn):</label>
-                            <input name="note" value={customerInfo.note} onChange={handleChange} placeholder="Ví dụ: Ít cay, nhiều nước lèo..." />
+            {/* Layout 2 Cột: Flexbox Row - KHÔNG BỊ RỚT DÒNG */}
+            <div style={{display: 'flex', gap: '30px', alignItems: 'flex-start'}}>
+                
+                {/* --- CỘT TRÁI: FORM ĐIỀN THÔNG TIN (Chiếm 65%) --- */}
+                <div style={{flex: '65%'}}>
+                    <h3 style={{display:'flex', alignItems:'center', gap:'10px', marginTop:0, marginBottom:'15px', color:'#333'}}>
+                        <FaMapMarkerAlt color="#ff6347"/> Thông tin giao hàng
+                    </h3>
+                    
+                    {/* Chọn nhanh địa chỉ */}
+                    {savedAddresses.length > 0 && (
+                        <div style={{marginBottom: '15px', display:'flex', alignItems:'center', gap:'10px', background: '#f0f8ff', padding: '10px', borderRadius: '6px'}}>
+                            <label style={{whiteSpace:'nowrap', fontWeight:'bold', color:'#007bff'}}>⚡ Chọn nhanh:</label>
+                            <select onChange={handleSelectAddress} style={{flex:1, padding: '8px', borderRadius:'4px', border:'1px solid #ccc'}}>
+                                <option value="">-- Sổ địa chỉ --</option>
+                                {savedAddresses.map(addr => (
+                                    <option key={addr.id} value={addr.id}>{addr.title} - {addr.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Form Input Gọn gàng */}
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
+                        <div>
+                            <label style={{fontSize:'0.9rem', fontWeight:'600', color:'#555', display:'block', marginBottom:'5px'}}><FaUser/> Người nhận</label>
+                            <input name="name" value={customerInfo.name} onChange={handleChange} placeholder="Họ tên" style={{width:'100%', padding:'10px', border:'1px solid #ddd', borderRadius:'4px'}} />
+                        </div>
+                        <div>
+                            <label style={{fontSize:'0.9rem', fontWeight:'600', color:'#555', display:'block', marginBottom:'5px'}}><FaPhone/> Số điện thoại</label>
+                            <input name="phone" value={customerInfo.phone} onChange={handleChange} placeholder="09xxxx" style={{width:'100%', padding:'10px', border:'1px solid #ddd', borderRadius:'4px'}} />
                         </div>
                     </div>
+                    
+                    <div style={{marginTop:'15px'}}>
+                        <label style={{fontSize:'0.9rem', fontWeight:'600', color:'#555', display:'block', marginBottom:'5px'}}><FaMapMarkerAlt/> Địa chỉ chi tiết</label>
+                        <textarea name="address" value={customerInfo.address} onChange={handleChange} placeholder="Số nhà, đường, phường/xã..." style={{width:'100%', padding:'10px', border:'1px solid #ddd', borderRadius:'4px', height:'60px', fontFamily:'inherit'}} />
+                    </div>
 
-                    <div className="order-summary" style={{flex: 1, minWidth: '350px', background: '#f8f9fa', padding: '25px', borderRadius: '8px', height: 'fit-content', border: '1px solid #dee2e6'}}>
-                        <h3 style={{marginTop:0, borderBottom:'1px solid #ddd', paddingBottom:'10px'}}>🧾 Đơn hàng từ: <span style={{color: '#007bff'}}>{branchName}</span></h3>
-                        <ul style={{listStyle:'none', padding:0, maxHeight:'300px', overflowY:'auto'}}>
-                            {items.map(item => (
-                                <li key={item.food_id} style={{display:'flex', alignItems: 'center', justifyContent:'space-between', marginBottom:'15px', borderBottom:'1px dashed #eee', paddingBottom:'10px'}}>
-                                    <div style={{display:'flex', alignItems: 'center', gap: '10px'}}>
-                                        {item.image_url && <img src={`${API_URL}${item.image_url}`} style={{width:'50px', height:'50px', objectFit:'cover', borderRadius:'4px'}} alt="" />}
-                                        <div>
-                                            <div style={{fontWeight:'bold'}}>{item.name}</div>
-                                            <div style={{fontSize:'0.9rem', color:'#666'}}>x {item.quantity}</div>
-                                        </div>
-                                    </div>
-                                    <span style={{fontWeight:'bold'}}>{formatMoney(item.price*item.quantity)}</span>
-                                </li>
-                            ))}
-                        </ul>
-                        
-                        {coupon && (
-                            <div style={{display:'flex', justifyContent:'space-between', color:'green', background:'#d4edda', padding:'10px', borderRadius:'4px', marginBottom:'10px'}}>
-                                <span>Mã giảm ({coupon.code}):</span>
-                                <span>-{coupon.discount_percent}%</span>
-                            </div>
-                        )}
-                        
-                        <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.4rem', fontWeight:'bold', marginTop:'15px', color:'#d32f2f', borderTop:'2px solid #ddd', paddingTop:'15px'}}>
-                            <span>Tổng tiền:</span>
-                            <span>{formatMoney(final_price)}</span>
-                        </div>
-                        
-                        <div style={{marginTop: '25px', display: 'flex', gap: '10px'}}>
-                            <button onClick={() => navigate('/cart')} style={{flex: 1, padding: '12px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor:'pointer'}}>Quay lại</button>
-                            <button onClick={handleConfirmOrder} disabled={loading} style={{flex: 2, padding: '12px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', fontSize:'1.1rem', cursor:'pointer'}}>
-                                {loading ? "Đang xử lý..." : "ĐẶT HÀNG NGAY"}
-                            </button>
-                        </div>
+                    <div style={{marginTop:'15px'}}>
+                        <label style={{fontSize:'0.9rem', fontWeight:'600', color:'#555', display:'block', marginBottom:'5px'}}><FaStickyNote/> Ghi chú (Tùy chọn)</label>
+                        <input name="note" value={customerInfo.note} onChange={handleChange} placeholder="VD: Ít cay, nhiều nước lèo..." style={{width:'100%', padding:'10px', border:'1px solid #ddd', borderRadius:'4px'}} />
                     </div>
                 </div>
-            )}
+
+                {/* --- CỘT PHẢI: TÓM TẮT ĐƠN HÀNG (Chiếm 35% - Sticky) --- */}
+                <div style={{
+                    flex: '35%', 
+                    background: '#fcfcfc', 
+                    padding: '20px', 
+                    borderRadius: '8px', 
+                    border: '1px solid #eee',
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.03)',
+                    position: 'sticky', top: '10px' // Luôn nổi khi cuộn
+                }}>
+                    <h3 style={{marginTop:0, borderBottom:'1px dashed #ccc', paddingBottom:'10px', display:'flex', alignItems:'center', gap:'10px', fontSize:'1.1rem'}}>
+                         <FaFileInvoiceDollar color="#ff6347"/> Đơn hàng từ: <span style={{color: '#007bff'}}>{branchName}</span>
+                    </h3>
+                    
+                    {/* List món ăn (Có scroll nếu quá dài) */}
+                    <div style={{maxHeight:'40vh', overflowY:'auto', paddingRight:'5px', marginBottom:'15px'}}>
+                        {items.map(item => (
+                            <div key={item.food_id} style={{display:'flex', alignItems: 'center', justifyContent:'space-between', marginBottom:'12px', borderBottom:'1px solid #f0f0f0', paddingBottom:'8px'}}>
+                                <div style={{display:'flex', alignItems: 'center', gap: '10px'}}>
+                                    {item.image_url ? 
+                                        <img src={`${API_URL}${item.image_url}`} style={{width:'40px', height:'40px', objectFit:'cover', borderRadius:'4px', border:'1px solid #ddd'}} alt="" /> 
+                                        : <div style={{width:'40px', height:'40px', background:'#eee', borderRadius:'4px'}}></div>
+                                    }
+                                    <div>
+                                        <div style={{fontWeight:'bold', fontSize:'0.9rem'}}>{item.name}</div>
+                                        <div style={{fontSize:'0.8rem', color:'#666'}}>x{item.quantity}</div>
+                                    </div>
+                                </div>
+                                <span style={{fontWeight:'600', fontSize:'0.95rem'}}>{formatMoney(item.price*item.quantity)}</span>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    {coupon && (
+                        <div style={{display:'flex', justifyContent:'space-between', color:'green', background:'#e8f5e9', padding:'8px', borderRadius:'4px', marginBottom:'10px', fontWeight:'600', fontSize:'0.9rem'}}>
+                            <span>Mã giảm ({coupon.code}):</span>
+                            <span>-{coupon.discount_percent}%</span>
+                        </div>
+                    )}
+                    
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.4rem', fontWeight:'800', marginTop:'10px', color:'#333', borderTop:'2px solid #333', paddingTop:'15px'}}>
+                        <span>Tổng tiền:</span>
+                        <span style={{color:'#ff6347'}}>{formatMoney(final_price)}</span>
+                    </div>
+                    
+                    <button onClick={handleConfirmOrder} disabled={loading} style={{
+                        width: '100%', padding: '15px', background: 'linear-gradient(90deg, #ff6347, #ff4757)', color: 'white', 
+                        border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize:'1.1rem', cursor:'pointer', marginTop: '20px',
+                        boxShadow: '0 4px 10px rgba(255, 99, 71, 0.3)', transition: 'transform 0.2s'
+                    }}>
+                        {loading ? "Đang xử lý..." : "XÁC NHẬN ĐẶT HÀNG"}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

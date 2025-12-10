@@ -1,20 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { FaArrowLeft } from "react-icons/fa"; // Import Icon
 import api from './api';
 
-// Định nghĩa URL gốc để load ảnh
 const API_URL = "http://localhost:8000";
 
 function OrderHistory() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
-    
-    // Modal state
     const [showReviewModal, setShowReviewModal] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [reviewData, setReviewData] = useState({ rating: 5, comment: '' });
-
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -44,42 +41,23 @@ function OrderHistory() {
     };
 
     const openReviewModal = (order) => {
-        if (!order.items || order.items.length === 0) {
-            toast.error("Không tìm thấy thông tin món ăn trong đơn này!");
-            return;
-        }
-        setSelectedOrder(order);
-        setShowReviewModal(true);
-        setReviewData({ rating: 5, comment: '' });
+        if (!order.items || order.items.length === 0) { toast.error("Không tìm thấy thông tin món ăn!"); return; }
+        setSelectedOrder(order); setShowReviewModal(true); setReviewData({ rating: 5, comment: '' });
     };
 
     const submitReview = async () => {
         if (!selectedOrder) return;
         const token = localStorage.getItem('access_token');
-
         try {
-            const items = selectedOrder.items; 
             const payload = {
                 order_id: selectedOrder.id,
                 rating_general: reviewData.rating,
                 comment: reviewData.comment,
-                items: items.map(item => ({
-                    food_id: item.food_id,
-                    score: reviewData.rating 
-                }))
+                items: selectedOrder.items.map(item => ({ food_id: item.food_id, score: reviewData.rating }))
             };
-
-            await api.post('/reviews', payload, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-
-            toast.success("Đánh giá thành công! ⭐");
-            setShowReviewModal(false);
-        } catch (err) {
-            console.error(err);
-            const msg = err.response?.data?.detail || "Lỗi gửi đánh giá";
-            toast.error(typeof msg === 'object' ? JSON.stringify(msg) : msg);
-        }
+            await api.post('/reviews', payload, { headers: { Authorization: `Bearer ${token}` } });
+            toast.success("Đánh giá thành công! ⭐"); setShowReviewModal(false);
+        } catch (err) { console.error(err); toast.error("Lỗi gửi đánh giá"); }
     };
 
     const renderStatus = (status) => {
@@ -93,11 +71,17 @@ function OrderHistory() {
 
     return (
         <div className="container" style={{maxWidth: '900px'}}>
-            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
-                <h2>📜 Lịch sử</h2>
-                <button onClick={()=>navigate('/shop')}>← Quay lại</button>
+             {/* --- HEADER NÂNG CẤP --- */}
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px', borderBottom: '1px solid #eee', paddingBottom: '10px'}}>
+                <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
+                    <button onClick={() => navigate('/shop')} className="icon-btn" title="Quay lại mua sắm">
+                        <FaArrowLeft size={20} />
+                    </button>
+                    <h2 style={{margin:0}}>📜 Lịch sử đơn hàng</h2>
+                </div>
+                <h2 style={{color: '#ff6347', fontWeight: '900', fontFamily: 'Arial', margin:0}}>FOOD ORDER</h2>
             </div>
-            
+
             <div className="order-list">
                 {orders.map(order => (
                     <div key={order.id} style={{border:'1px solid #ddd', padding:'20px', marginBottom:'20px', borderRadius:'8px', background: 'white'}}>
@@ -105,50 +89,23 @@ function OrderHistory() {
                             <div><strong>#{order.id}</strong> - {formatDate(order.created_at)}</div>
                             <div>{renderStatus(order.status)}</div>
                         </div>
-                        
-                        {/* --- DANH SÁCH MÓN ĂN (CÓ ẢNH) --- */}
                         <div style={{background: '#f9f9f9', padding: '10px', borderRadius: '5px', margin: '10px 0'}}>
-                            {order.items && order.items.length > 0 ? (
-                                order.items.map((item, idx) => (
-                                    <div key={idx} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem', marginBottom: '8px'}}>
-                                        <div style={{display: 'flex', alignItems: 'center'}}>
-                                            {/* Ảnh Thumbnail */}
-                                            {item.image_url ? (
-                                                <img 
-                                                    src={`${API_URL}${item.image_url}`} 
-                                                    alt="" 
-                                                    style={{width: '35px', height: '35px', objectFit: 'cover', borderRadius: '4px', marginRight: '10px'}} 
-                                                />
-                                            ) : (
-                                                // Icon dự phòng nếu không có ảnh
-                                                <span style={{width: '35px', height: '35px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eee', borderRadius: '4px', marginRight: '10px'}}>🍖</span>
-                                            )}
-                                            
-                                            <span>{item.quantity}x <b>{item.food_name}</b></span>
-                                        </div>
-                                        <span style={{color: '#666'}}>{formatMoney(item.price)}</span>
+                            {order.items?.map((item, idx) => (
+                                <div key={idx} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem', marginBottom: '8px'}}>
+                                    <div style={{display: 'flex', alignItems: 'center'}}>
+                                        {item.image_url ? ( <img src={`${API_URL}${item.image_url}`} style={{width: '35px', height: '35px', objectFit: 'cover', borderRadius: '4px', marginRight: '10px'}} /> ) : ( <span>🍖</span> )}
+                                        <span>{item.quantity}x <b>{item.food_name}</b></span>
                                     </div>
-                                ))
-                            ) : (
-                                <p style={{color: '#999', fontSize: '0.9rem'}}>Không có thông tin món ăn</p>
-                            )}
+                                    <span style={{color: '#666'}}>{formatMoney(item.price)}</span>
+                                </div>
+                            ))}
                         </div>
-                        {/* ---------------------------------- */}
-
                         <div style={{margin:'10px 0', fontSize: '0.9rem'}}>📍 {order.delivery_address}</div>
-                        
                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                            <span style={{color:'#d32f2f', fontWeight:'bold', fontSize: '1.2rem'}}>
-                                Tổng: {formatMoney(order.total_price)}
-                            </span>
-                            
+                            <span style={{color:'#d32f2f', fontWeight:'bold', fontSize: '1.2rem'}}>Tổng: {formatMoney(order.total_price)}</span>
                             <div style={{display: 'flex', gap: '10px'}}>
-                                {['PENDING_PAYMENT','PAID'].includes(order.status) && 
-                                    <button onClick={()=>handleCancelOrder(order.id)} style={{color:'red', border:'1px solid red', background:'white', padding: '5px 10px', cursor: 'pointer'}}>Hủy đơn</button>
-                                }
-                                {order.status === 'COMPLETED' && 
-                                    <button onClick={()=>openReviewModal(order)} style={{background:'#f6c23e', color:'white', border:'none', padding:'8px 15px', borderRadius:'4px', cursor: 'pointer', fontWeight: 'bold'}}>⭐ Đánh giá</button>
-                                }
+                                {['PENDING_PAYMENT','PAID'].includes(order.status) && <button onClick={()=>handleCancelOrder(order.id)} style={{color:'red', border:'1px solid red', background:'white', padding: '5px 10px', cursor: 'pointer'}}>Hủy đơn</button>}
+                                {order.status === 'COMPLETED' && <button onClick={()=>openReviewModal(order)} style={{background:'#f6c23e', color:'white', border:'none', padding:'8px 15px', borderRadius:'4px', cursor: 'pointer', fontWeight: 'bold'}}>⭐ Đánh giá</button>}
                             </div>
                         </div>
                     </div>
@@ -159,11 +116,7 @@ function OrderHistory() {
                 <div className="modal-overlay" onClick={()=>setShowReviewModal(false)}>
                     <div className="modal-content" onClick={e=>e.stopPropagation()}>
                         <h3>Đánh giá đơn #{selectedOrder?.id}</h3>
-                        <div style={{textAlign:'center', margin:'20px 0'}}>
-                            {[1,2,3,4,5].map(s=>(
-                                <span key={s} className={`star-rating ${s<=reviewData.rating?'active':''}`} onClick={()=>setReviewData({...reviewData, rating:s})}>★</span>
-                            ))}
-                        </div>
+                        <div style={{textAlign:'center', margin:'20px 0'}}>{[1,2,3,4,5].map(s=>(<span key={s} className={`star-rating ${s<=reviewData.rating?'active':''}`} onClick={()=>setReviewData({...reviewData, rating:s})}>★</span>))}</div>
                         <textarea className="review-textarea" placeholder="Nhập bình luận..." value={reviewData.comment} onChange={e=>setReviewData({...reviewData, comment:e.target.value})} />
                         <div style={{display:'flex', gap:'10px', marginTop:'20px'}}>
                             <button onClick={()=>setShowReviewModal(false)} style={{flex:1}}>Đóng</button>

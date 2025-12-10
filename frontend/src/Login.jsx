@@ -12,19 +12,30 @@ function Login() {
     const handleLogin = async (e) => {
         e.preventDefault();
         setLoading(true);
-
         try {
             const res = await api.post('/login', { email, password });
             
-            const { access_token, role, seller_mode, branch_id, id } = res.data;
+            // Log ra để kiểm tra xem backend trả về gì
+            console.log("Login Response:", res.data);
 
+            const { access_token, role, branch_id, id } = res.data;
+
+            // Lưu dữ liệu quan trọng
             localStorage.setItem('access_token', access_token);
             localStorage.setItem('role', role);
-            if (seller_mode) localStorage.setItem('seller_mode', seller_mode);
-            if (branch_id) localStorage.setItem('branch_id', branch_id);
-            if (id) localStorage.setItem('user_id', id);
+            localStorage.setItem('user_id', id);
+            
+            // Xử lý logic Branch ID kỹ càng hơn
+            if (branch_id) {
+                localStorage.setItem('branch_id', branch_id);
+            } else {
+                // Nếu backend trả về user object lồng nhau (tùy cấu trúc backend cũ của bạn)
+                if (res.data.user && res.data.user.branch_id) {
+                    localStorage.setItem('branch_id', res.data.user.branch_id);
+                }
+            }
 
-            toast.success("Đăng nhập thành công! 👋");
+            toast.success("Đăng nhập thành công!");
 
             if (role === 'seller') {
                 navigate('/seller-dashboard');
@@ -34,34 +45,25 @@ function Login() {
 
         } catch (err) {
             console.error(err);
-            toast.error("Sai email hoặc mật khẩu! ❌");
+            toast.error("Đăng nhập thất bại! Kiểm tra lại Email/Pass hoặc Server.");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="container">
-            <h2>Đăng nhập</h2>
-            <form onSubmit={handleLogin} className="auth-form">
-                <input 
-                    type="email" placeholder="Email" required
-                    value={email} onChange={e => setEmail(e.target.value)} 
-                />
-                <input 
-                    type="password" placeholder="Mật khẩu" required
-                    value={password} onChange={e => setPassword(e.target.value)} 
-                />
-                <button type="submit" disabled={loading}>
-                    {loading ? <><span className="spinner"></span> Đang xử lý...</> : "Đăng nhập"}
+        <div className="container" style={{maxWidth:'500px', marginTop:'80px', textAlign:'center'}}>
+            <h1 style={{color: '#ff6347', fontSize:'40px', fontWeight:'900'}}>FOOD ORDER</h1>
+            <h2 style={{margin:'20px 0'}}>Đăng nhập</h2>
+            <form onSubmit={handleLogin} className="auth-form" style={{display:'flex', flexDirection:'column', gap:'15px'}}>
+                <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required style={{padding:'15px'}} />
+                <input type="password" placeholder="Mật khẩu" value={password} onChange={e => setPassword(e.target.value)} required style={{padding:'15px'}} />
+                <button type="submit" disabled={loading} style={{padding:'15px', background:'#2c3e50', color:'white', fontSize:'18px'}}>
+                    {loading ? "Đang kết nối..." : "Đăng nhập ngay"}
                 </button>
             </form>
-            
-            <p style={{marginTop: '15px'}}>
-                Chưa có tài khoản? <Link to="/register">Đăng ký Buyer ngay</Link>
-            </p>
+            <p style={{marginTop:'20px'}}>Chưa có tài khoản? <Link to="/register" style={{fontWeight:'bold', color:'#ff6347'}}>Đăng ký ngay</Link></p>
         </div>
     );
 }
-
 export default Login;
